@@ -1,5 +1,5 @@
 #
-# $Id$
+# $Id: STEPPINGS 1487 2009-04-08 21:07:12Z arniml $
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -16,14 +16,8 @@
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA
 # 02111-1307, USA.
 #
-# Written by Rojhalat Ibrahim <ibrahim@schenk.isar.de>
+# Written by Arnim Laeuger <arniml@users.sourceforge.net>
 #
 
-# bits 27-12 of the Device Identification Register
-0010000010000010	ep1c6q240		EP1C6Q240
-0010000010000011	ep1c12			EP1C12
-0010000010000100	ep1c20f400		EP1C20F400
-0111000100101000	epm7128aetc100		EPM7128AETC100
-0111000001100100	epm3064a		EPM3064A
-0010000010110010	ep2c8			EP2C8
-0010000010100001        epm240t100              EPM240/MAX2
+# bits 31-28 of the Device Identification Register
+0000	epm240t100		0

@@ -1,5 +1,5 @@
 #
-# $Id$
+# $Id: Makefile.am 2049 2014-08-03 14:13:10Z vapier $
 #
 # Copyright (C) 2002 ETC s.r.o.
 #
@@ -48,6 +48,7 @@ nobase_dist_pkgdata_DATA = \
 	altera/epm3064a/l44 \
 	altera/epm3064a/t100 \
 	altera/epm3064a/t44 \
+	altera/epm240t100/STEPPINGS \
 	atheros/ar2312/ar2312 \
 	atmel/PARTS \
 	atmel/at32ap7000/STEPPINGS \

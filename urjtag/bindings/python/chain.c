@@ -809,6 +809,168 @@ urj_pyc_flashmem (urj_pychain_t *self, PyObject *args)
     return Py_BuildValue ("i", r);
 }
 
+static PyObject *
+urj_pyc_get_max_len_for_shift_raw (urj_pychain_t *self, PyObject *args)
+{
+    urj_chain_t *urc = self->urchain;
+
+    if (!urj_pyc_precheck (urc, UPRC_CBL))
+        return NULL;
+
+    if (!PyArg_ParseTuple
+        (args, ""))
+        return NULL;
+
+    return Py_BuildValue ("i", urc->cable->todo.max_items/2);
+}
+
+static PyObject *
+urj_pyc_shift_raw (urj_pychain_t *self, PyObject *args)
+{
+    urj_chain_t *urc = self->urchain;
+    char *tms = NULL;
+    char *tdi = NULL;
+    char *tdi2;
+    char *tdo;
+    PyObject *result;
+    int len;
+
+    if (!urj_pyc_precheck (urc, UPRC_CBL))
+        return NULL;
+
+    if (!PyArg_ParseTuple
+        (args, "ss", &tms, &tdi))
+        return NULL;
+
+    for (len=0;tms[len] && tdi[len];len++) {
+      if ((tms[len] != '0' && tms[len] != '1') || (tdi[len] != '0' && tdi[len] != '1')) {
+        PyErr_SetString(PyExc_ValueError, "both arguments must contain only '0' and '1'");
+        return NULL;
+      }
+    }
+    if (tms[len] || tdi[len]) {
+      PyErr_SetString(PyExc_ValueError, "both arguments must have the same length");
+      return NULL;
+    }
+
+    tdi2 = (char*)malloc(len+1);
+    if (!tdi2) {
+      return PyErr_NoMemory();
+    }
+
+    tdo = (char*)malloc(len+1);
+    if (!tdo) {
+      free(tdi2);
+      return PyErr_NoMemory();
+    }
+    tdo[len] = 0;
+
+    for (int i=0;i<len;i++) {
+      if (tms[i] == '1' || i+1 >= len || tms[i+1] == '1' || (urj_tap_state(urc)&(URJ_TAP_STATE_SHIFT|URJ_TAP_STATE_CAPTURE))!=URJ_TAP_STATE_SHIFT) {
+        tdi2[i] = 2;
+        if (urj_tap_cable_defer_get_tdo(urc->cable) != URJ_STATUS_OK) {
+          free(tdi2);
+          free(tdo);
+          PyErr_SetString(PyExc_RuntimeError, "urj_tap_cable_defer_get_tdo has failed");
+          return NULL;
+        }
+        if (urj_tap_chain_defer_clock(urc, tms[i]=='1', tdi[i]=='1', 1) != URJ_STATUS_OK) {
+          free(tdi2);
+          free(tdo);
+          PyErr_SetString(PyExc_RuntimeError, "urj_tap_chain_defer_clock has failed");
+          return NULL;
+        }
+      } else {
+        int j;
+        for (j=i;j<len && tms[j] == '0';j++) {
+          tdi2[j] = (tdi[j]=='1');
+        }
+        if (urj_tap_cable_defer_transfer(urc->cable, j-i, &tdi2[i], &tdo[i]) != URJ_STATUS_OK) {
+          free(tdi2);
+          free(tdo);
+          PyErr_SetString(PyExc_RuntimeError, "urj_tap_cable_defer_transfer has failed");
+          return NULL;
+        }
+        i = j-1;
+      }
+    }
+
+    for (int i=0;i<len;i++) {
+      //if (tms[i] == '1' || i+1 >= len || tms[i+1] == '1') {
+      if (tdi2[i] == 2) {
+        int tdo1 = urj_tap_cable_get_tdo_late(urc->cable);
+        if (tdo1 < 0) {
+          free(tdi2);
+          free(tdo);
+          PyErr_SetString(PyExc_RuntimeError, "urj_tap_cable_get_tdo_late has failed");
+          return NULL;
+        } else if (tdo1)
+          tdo[i] = '1';
+        else
+          tdo[i] = '0';
+      } else {
+        int j;
+        for (j=i+1;j<len && tms[j] == '0';j++);
+        if (urj_tap_cable_transfer_late(urc->cable, &tdo[i]) != URJ_STATUS_OK) {
+          free(tdi2);
+          free(tdo);
+          PyErr_SetString(PyExc_RuntimeError, "urj_tap_cable_transfer_late has failed");
+          return NULL;
+        }
+        for (int k=i;k<j;k++) {
+          tdo[k] = (tdo[k]&1 ? '1' : '0');
+        }
+        i = j-1;
+      }
+    }
+
+    urj_tap_cable_flush(urc->cable, URJ_TAP_CABLE_COMPLETELY);
+
+    result = PyString_FromString(tdo);
+    free(tdi2);
+    free(tdo);
+    return result;
+}
+
+static PyObject *
+urj_pyc_get_state (urj_pychain_t *self, PyObject *args)
+{
+    urj_chain_t *urc = self->urchain;
+    int state;
+    char buf[64];
+    char *tmp;
+
+    if (!urj_pyc_precheck (urc, UPRC_CBL))
+        return NULL;
+
+    state = urj_tap_state(urc);
+
+    tmp = buf;
+    if (state & URJ_TAP_STATE_SHIFT)
+      tmp += snprintf(tmp, sizeof(buf)-(tmp-buf), "_SHIFT");
+    if (state & URJ_TAP_STATE_IDLE)
+      tmp += snprintf(tmp, sizeof(buf)-(tmp-buf), "_IDLE");
+    if (state & URJ_TAP_STATE_CAPTURE)
+      tmp += snprintf(tmp, sizeof(buf)-(tmp-buf), "_CAPTURE");
+    if (state & URJ_TAP_STATE_UPDATE)
+      tmp += snprintf(tmp, sizeof(buf)-(tmp-buf), "_UPDATE");
+    if (state & URJ_TAP_STATE_PAUSE)
+      tmp += snprintf(tmp, sizeof(buf)-(tmp-buf), "_PAUSE");
+    if (state & URJ_TAP_STATE_RESET)
+      tmp += snprintf(tmp, sizeof(buf)-(tmp-buf), "_RESET");
+    if (state & URJ_TAP_STATE_DR)
+      tmp += snprintf(tmp, sizeof(buf)-(tmp-buf), "_DR");
+    if (state & URJ_TAP_STATE_IR)
+      tmp += snprintf(tmp, sizeof(buf)-(tmp-buf), "_IR");
+    if (state & ~0xff)
+      tmp += snprintf(tmp, sizeof(buf)-(tmp-buf), "+0x%08x", state);
+    if (tmp == buf)
+      tmp += snprintf(tmp, sizeof(buf)-(tmp-buf), "_NONE");
+    *tmp = 0;
+ 
+    return PyString_FromString(buf+1);
+}
+
 static PyMethodDef urj_pyc_methods[] =
 {
     {"cable", (PyCFunction) urj_pyc_cable, METH_VARARGS,
@@ -877,6 +1039,14 @@ static PyMethodDef urj_pyc_methods[] =
      "write a single word"},
     {"flashmem", (PyCFunction) urj_pyc_flashmem, METH_VARARGS,
      "burn flash memory with data from a file"},
+
+    {"get_max_len_for_shift_raw", (PyCFunction) urj_pyc_get_max_len_for_shift_raw, METH_VARARGS,
+     "get maximum length (in bits) for shift_raw"},
+    {"shift_raw", (PyCFunction) urj_pyc_shift_raw, METH_VARARGS,
+     "shift a string of 0 and 1 into the chain, arguments are two strings for tms and tdi, returns one string with tdo data"},
+    {"get_state", (PyCFunction) urj_pyc_get_state, METH_NOARGS,
+     "get current JTAG state"},
+ 
     {NULL}                      /* Sentinel */
 };
 

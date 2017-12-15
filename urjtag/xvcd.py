@@ -26,7 +26,11 @@ class MyTCPHandler(SocketServer.BaseRequestHandler):
         while True:
             cmd = self.request.recv(2)
             while cmd=="" or cmd[-1] != ":" and len(cmd) < 20:
-                cmd += self.request.recv(1)
+                x = self.request.recv(1)
+                if x == "":
+                    print "connection closed"
+                    return
+                cmd += x
             print "cmd: %r" % cmd
             
             if cmd == "getinfo:":

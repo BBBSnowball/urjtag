@@ -1,5 +1,7 @@
 # Usage: PYTHONPATH=/home/user/urjtag-install/lib64/python2.7/site-packages/ LD_LIBRARY_PATH=/home/user/urjtag-install/lib/ python xvcd.py
-# xilinx_xvc host=127.0.0.1:9999 maxpacketsize=1024 disableversioncheck=true
+# impact: xilinx_xvc host=127.0.0.1:9999 maxpacketsize=1024 disableversioncheck=true
+# SDK:    -cable type xilinx_plugin modulename xilinx_xvc modulearg host=127.0.0.1:9999 modulearg maxpacketsize=1024 modulearg disableversioncheck=true
+# xmd:    xrjtagchain -cable type xilinx_plugin modulename xilinx_xvc modulearg host=127.0.0.1:9999 modulearg maxpacketsize=1024 modulearg disableversioncheck=true
 import urjtag
 c=urjtag.chain()
 c.cable("UsbBlaster")
@@ -24,7 +26,11 @@ class MyTCPHandler(SocketServer.BaseRequestHandler):
         while True:
             cmd = self.request.recv(2)
             while cmd=="" or cmd[-1] != ":" and len(cmd) < 20:
-                cmd += self.request.recv(1)
+                x = self.request.recv(1)
+                if x == "":
+                    print "connection closed"
+                    return
+                cmd += x
             print "cmd: %r" % cmd
             
             if cmd == "getinfo:":
